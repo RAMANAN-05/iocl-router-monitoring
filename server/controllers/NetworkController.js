@@ -13,7 +13,7 @@ exports.getNetworkStatus = async (req, res) => {
       return res.status(500).json({ message: 'No location data available' });
     }
 
-    const checkedAt = new Date(); // Same timestamp for all logs
+    const checkedAt = new Date(); // Shared timestamp
 
     const results = await Promise.all(
       locations.map(async (loc) => {
@@ -23,32 +23,36 @@ exports.getNetworkStatus = async (req, res) => {
 
         console.log(`📍 Checking: ${locationName} (Jio: ${jioIP}, BSNL: ${bsnlIP})`);
 
-        let jioResult = { alive: false };
-        let bsnlResult = { alive: false };
+        let jioStatus = 'poor';
+        let bsnlStatus = 'poor';
 
         try {
           if (jioIP && !['No Link', 'NA'].includes(jioIP)) {
-            jioResult = await ping.promise.probe(jioIP);
+            const jioRes = await ping.promise.probe(jioIP);
+            jioStatus = jioRes.alive ? 'good' : 'poor';
           }
-          if (bsnlIP && !['No Link', 'NA'].includes(bsnlIP)) {
-            bsnlResult = await ping.promise.probe(bsnlIP);
-          }
-        } catch (pingErr) {
-          console.warn(`⚠️ Ping error at ${locationName}:`, pingErr);
+        } catch (jioErr) {
+          console.warn(`⚠️ Jio ping failed for ${locationName}:`, jioErr.message);
         }
 
-        const jioStatus = jioResult.alive ? 'good' : 'poor';
-        const bsnlStatus = bsnlResult.alive ? 'good' : 'poor';
+        try {
+          if (bsnlIP && !['No Link', 'NA'].includes(bsnlIP)) {
+            const bsnlRes = await ping.promise.probe(bsnlIP);
+            bsnlStatus = bsnlRes.alive ? 'good' : 'poor';
+          }
+        } catch (bsnlErr) {
+          console.warn(`⚠️ BSNL ping failed for ${locationName}:`, bsnlErr.message);
+        }
 
         try {
           await PingLog.create({
             location: locationName,
             jio: jioStatus,
             bsnl: bsnlStatus,
-            checkedAt
+            checkedAt,
           });
         } catch (dbErr) {
-          console.error(`❌ DB Save Error for ${locationName}:`, dbErr);
+          console.error(`❌ DB Save Error for ${locationName}:`, dbErr.message);
         }
 
         return {
@@ -66,7 +70,7 @@ exports.getNetworkStatus = async (req, res) => {
 
     res.json(results);
   } catch (err) {
-    console.error("❌ Error fetching network status:", err);
+    console.error("❌ Error in getNetworkStatus:", err.message);
     res.status(500).json({ message: 'Failed to get network status' });
   }
 };
@@ -77,7 +81,7 @@ exports.getNetworkHistory = async (req, res) => {
     const history = await PingLog.find().sort({ checkedAt: -1 }).limit(100);
     res.status(200).json(history);
   } catch (err) {
-    console.error("❌ Error fetching network history:", err);
+    console.error("❌ Error in getNetworkHistory:", err.message);
     res.status(500).json({ message: 'Failed to get network history' });
   }
 };
