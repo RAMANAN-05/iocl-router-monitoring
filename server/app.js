@@ -20,6 +20,11 @@ mongoose.connect(process.env.MONGO_URI)
   .then(() => console.log('✅ MongoDB connected'))
   .catch((err) => console.error('❌ MongoDB connection error:', err));
 
+// ✅ Test root route to check deployment
+app.get('/', (req, res) => {
+  res.send('✅ Backend is working!');
+});
+
 // ✅ Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/network', networkRoutes);
