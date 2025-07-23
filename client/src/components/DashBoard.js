@@ -1,187 +1,89 @@
 import React, { useEffect, useState, useRef, useCallback } from "react";
 import "./DashBoard.css";
-import {
-  FaArrowUp,
-  FaArrowDown,
-  FaVolumeMute,
-  FaVolumeUp,
-  FaSignOutAlt,
-} from "react-icons/fa";
-import { useNavigate } from "react-router-dom";
+import { FaArrowUp, FaArrowDown } from "react-icons/fa";
 
-// ✅ Set your backend Render URL here
-const BASE_URL = "https://iocl-backend.onrender.com";
-
+const alarmSound = new Audio("/alarm.mp3");
+const BASE_URL = "https://iocl-backend.onrender.com"; // ✅ Backend URL
 
 const DashBoard = () => {
-  const [locations, setLocations] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [isMuted, setIsMuted] = useState(false);
-  const [isAlarmPlaying, setIsAlarmPlaying] = useState(false);
-
-  const prevLocationsRef = useRef([]);
-  const audioRef = useRef(new Audio("/alarm.mp3"));
-  const intervalRef = useRef(null);
+  const [statusList, setStatusList] = useState([]);
   const isMountedRef = useRef(true);
-  const hasAlertedRef = useRef(false);
-  const navigate = useNavigate();
-
-  const poorStartTimes = useRef({});
-
-  const detectDroppedConnections = (prev, current) => {
-    const dropped = [];
-    current.forEach((entry) => {
-      const prevEntry = prev.find((p) => p.location === entry.location);
-      if (!prevEntry) return;
-      const losses = [];
-      if (prevEntry.jio === "good" && entry.jio === "poor") losses.push("Jio");
-      if (prevEntry.bsnl === "good" && entry.bsnl === "poor") losses.push("BSNL");
-      if (losses.length > 0) dropped.push(`${entry.location}: ${losses.join(", ")}`);
-    });
-    return dropped;
-  };
-
-  const checkContinuedPoorStatus = (data) => {
-    const now = Date.now();
-    const alarms = [];
-
-    data.forEach((entry) => {
-      ["jio", "bsnl"].forEach((network) => {
-        const key = `${entry.location}-${network}`;
-        const status = entry[network];
-
-        if (status === "poor") {
-          if (!poorStartTimes.current[key]) {
-            poorStartTimes.current[key] = now;
-          } else if (now - poorStartTimes.current[key] >= 30 * 60 * 1000) {
-            alarms.push(`${entry.location}: ${network.toUpperCase()}`);
-          }
-        } else {
-          delete poorStartTimes.current[key];
-        }
-      });
-    });
-    return alarms;
-  };
+  const [mute, setMute] = useState(false);
 
   const fetchStatus = useCallback(async () => {
     try {
-      const res = await fetch(`${BASE_URL}/api/network/status`);
+      const res = await fetch(`${BASE_URL}/api/network/status`, {
+        method: 'GET',
+        mode: 'cors', // ✅ Required for cross-origin
+      });
+
       const data = await res.json();
       if (!isMountedRef.current) return;
 
-      const dropped = detectDroppedConnections(prevLocationsRef.current, data);
-      const alarms = checkContinuedPoorStatus(data);
+      const newStatus = data.map(item => ({
+        ...item,
+        jioGood: item.jio === "good",
+        bsnlGood: item.bsnl === "good",
+      }));
 
-      if ((dropped.length > 0 || alarms.length > 0) && !isMuted && !hasAlertedRef.current) {
-        audioRef.current.loop = true;
-        audioRef.current.currentTime = 0;
-        audioRef.current.play().then(() => setIsAlarmPlaying(true))
-          .catch((err) => console.warn("Audio play error:", err));
-        hasAlertedRef.current = true;
-        const alertMessage = [
-          dropped.length > 0 ? `Signal dropped:\n${dropped.join("\n")}` : null,
-          alarms.length > 0 ? `30min poor status:\n${alarms.join("\n")}` : null,
-        ].filter(Boolean).join("\n\n");
-        alert("⚠️ " + alertMessage);
+      const alarmNeeded = newStatus.some(
+        (item) => !item.jioGood || !item.bsnlGood
+      );
+
+      if (alarmNeeded && !mute) {
+        alarmSound.loop = true;
+        alarmSound.play();
+      } else {
+        alarmSound.pause();
+        alarmSound.currentTime = 0;
       }
 
-      if (dropped.length === 0 && alarms.length === 0) {
-        hasAlertedRef.current = false;
-        audioRef.current.pause();
-        audioRef.current.currentTime = 0;
-        setIsAlarmPlaying(false);
-      }
-
-      prevLocationsRef.current = data;
-      setLocations(data);
-      setLoading(false);
+      setStatusList(newStatus);
     } catch (err) {
       console.error("Error fetching status", err);
     }
-  }, [isMuted]);
+  }, [mute]);
 
   useEffect(() => {
     fetchStatus();
-    intervalRef.current = setInterval(fetchStatus, 30 * 60 * 1000); // Every 30 minutes
+    const interval = setInterval(fetchStatus, 1000);
+
     return () => {
-      clearInterval(intervalRef.current);
+      clearInterval(interval);
       isMountedRef.current = false;
     };
   }, [fetchStatus]);
 
-  const handleMuteToggle = () => {
-    setIsMuted((prev) => {
-      const next = !prev;
-      if (next) {
-        audioRef.current.pause();
-        audioRef.current.currentTime = 0;
-        setIsAlarmPlaying(false);
-      } else {
-        const dropped = detectDroppedConnections(prevLocationsRef.current, locations);
-        const alarms = checkContinuedPoorStatus(locations);
-        if (dropped.length > 0 || alarms.length > 0) {
-          audioRef.current.loop = true;
-          audioRef.current.currentTime = 0;
-          audioRef.current.play().then(() => setIsAlarmPlaying(true))
-            .catch((err) => console.warn("Audio play error:", err));
-        }
-      }
-      return next;
-    });
-  };
-
-  const handleLogout = () => {
-    isMountedRef.current = false;
-    clearInterval(intervalRef.current);
-    audioRef.current.pause();
-    audioRef.current.currentTime = 0;
-    localStorage.removeItem("token");
-    navigate("/login");
-  };
-
-  const renderArrow = (status) =>
-    status === "good" ? (
-      <FaArrowUp className="arrow green" />
-    ) : (
-      <FaArrowDown className="arrow red" />
-    );
-
   return (
-    <div className="dashboard-container">
-      <header className="dashboard-header">
-        <h1>IOCL Network Status</h1>
-        <div className="header-buttons">
-          <button onClick={handleMuteToggle} title={isMuted ? "Unmute Alarm" : "Mute Alarm"}>
-            {isMuted ? <FaVolumeMute /> : <FaVolumeUp />}
-          </button>
-          <button onClick={handleLogout} title="Logout">
-            <FaSignOutAlt /> Logout
-          </button>
-        </div>
-      </header>
-
-      {loading ? (
-        <div className="loading">Loading...</div>
-      ) : (
-        <div className="grid-container">
-          {locations.map((loc, index) => (
-            <div className="grid-box" key={`${loc.location}-${index}`}>
-              <div className="location-name">{loc.location}</div>
-              <div className="status-line">
-                <span>Jio:</span> {renderArrow(loc.jio)}
-              </div>
-              <div className="status-line">
-                <span>BSNL:</span> {renderArrow(loc.bsnl)}
-              </div>
-            </div>
+    <div className="dashboard">
+      <h1>📡 IOCL Network Monitoring</h1>
+      <button onClick={() => setMute(!mute)} className="mute-btn">
+        {mute ? "🔇 Unmute" : "🔊 Mute"}
+      </button>
+      <table>
+        <thead>
+          <tr>
+            <th>Location</th>
+            <th>Jio</th>
+            <th>BSNL</th>
+            <th>Last Updated</th>
+          </tr>
+        </thead>
+        <tbody>
+          {statusList.map((item, idx) => (
+            <tr key={idx}>
+              <td>{item.location}</td>
+              <td className={item.jioGood ? "good" : "bad"}>
+                {item.jioGood ? <FaArrowUp /> : <FaArrowDown />}
+              </td>
+              <td className={item.bsnlGood ? "good" : "bad"}>
+                {item.bsnlGood ? <FaArrowUp /> : <FaArrowDown />}
+              </td>
+              <td>{new Date(item.timestamp).toLocaleString()}</td>
+            </tr>
           ))}
-        </div>
-      )}
-
-      {isAlarmPlaying && !isMuted && (
-        <div className="alarm-status">🔔 Alarm Active</div>
-      )}
+        </tbody>
+      </table>
     </div>
   );
 };
