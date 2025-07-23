@@ -9,7 +9,13 @@ const readLocationData = require('./utils/readExcel');
 dotenv.config();
 
 const app = express();
-app.use(cors());
+
+// ✅ Allow CORS for your frontend deployment URL
+app.use(cors({
+  origin: 'https://connect-frontend-t3if.onrender.com',
+  credentials: true // Optional if you use cookies or sessions
+}));
+
 app.use(express.json());
 
 // 🔍 Debug: Check if MONGO_URI is loading from env
