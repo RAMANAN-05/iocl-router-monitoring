@@ -1,38 +1,57 @@
 const ping = require('ping');
 const readLocationData = require('../utils/readExcel');
-const PingLog = require('../models/PingLog'); // ✅ Import the log model
+const PingLog = require('../models/PingLog'); // Log model
 
 exports.getNetworkStatus = async (req, res) => {
   try {
+    console.log("⚙️ Starting network status check...");
+
     const locations = readLocationData();
-    const checkedAt = new Date(); // ✅ Same timestamp for all logs
+    if (!locations || locations.length === 0) {
+      console.error("⚠️ No locations found from Excel.");
+      return res.status(500).json({ message: 'No location data available' });
+    }
+
+    const checkedAt = new Date(); // Same timestamp for all logs
 
     const results = await Promise.all(
       locations.map(async (loc) => {
-        const jioIP = loc.jio;
-        const bsnlIP = loc.bsnl;
+        const locationName = loc.location?.trim();
+        const jioIP = loc.jio?.trim();
+        const bsnlIP = loc.bsnl?.trim();
 
-        const jioResult = (jioIP && !['No Link', 'NA'].includes(jioIP.trim()))
-          ? await ping.promise.probe(jioIP.trim())
-          : { alive: false };
+        console.log(`📍 Checking: ${locationName} (Jio: ${jioIP}, BSNL: ${bsnlIP})`);
 
-        const bsnlResult = (bsnlIP && !['No Link', 'NA'].includes(bsnlIP.trim()))
-          ? await ping.promise.probe(bsnlIP.trim())
-          : { alive: false };
+        let jioResult = { alive: false };
+        let bsnlResult = { alive: false };
+
+        try {
+          if (jioIP && !['No Link', 'NA'].includes(jioIP)) {
+            jioResult = await ping.promise.probe(jioIP);
+          }
+          if (bsnlIP && !['No Link', 'NA'].includes(bsnlIP)) {
+            bsnlResult = await ping.promise.probe(bsnlIP);
+          }
+        } catch (pingErr) {
+          console.warn(`⚠️ Ping error at ${locationName}:`, pingErr);
+        }
 
         const jioStatus = jioResult.alive ? 'good' : 'poor';
         const bsnlStatus = bsnlResult.alive ? 'good' : 'poor';
 
-        // ✅ Save to PingLog with correct field names
-        await PingLog.create({
-          location: loc.location?.trim(),
-          jio: jioStatus,
-          bsnl: bsnlStatus,
-          checkedAt: checkedAt  // ✅ must be Date object for TTL
-        });
+        try {
+          await PingLog.create({
+            location: locationName,
+            jio: jioStatus,
+            bsnl: bsnlStatus,
+            checkedAt
+          });
+        } catch (dbErr) {
+          console.error(`❌ DB Save Error for ${locationName}:`, dbErr);
+        }
 
         return {
-          location: loc.location?.trim(),
+          location: locationName,
           jio: jioStatus,
           bsnl: bsnlStatus,
           checkedAt: checkedAt.toLocaleString('en-IN', {
