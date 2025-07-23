@@ -9,6 +9,10 @@ import {
 } from "react-icons/fa";
 import { useNavigate } from "react-router-dom";
 
+// ✅ Set your backend Render URL here
+const BASE_URL = "https://iocl-backend.onrender.com";
+
+
 const DashBoard = () => {
   const [locations, setLocations] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -62,7 +66,7 @@ const DashBoard = () => {
 
   const fetchStatus = useCallback(async () => {
     try {
-      const res = await fetch("/api/network/status");
+      const res = await fetch(`${BASE_URL}/api/network/status`);
       const data = await res.json();
       if (!isMountedRef.current) return;
 
