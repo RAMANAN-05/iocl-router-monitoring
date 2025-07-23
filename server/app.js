@@ -12,7 +12,10 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// ✅ MongoDB connection setup (deprecated options removed)
+// 🔍 Debug: Check if MONGO_URI is loading from env
+console.log('🔧 MONGO_URI from env:', process.env.MONGO_URI);
+
+// ✅ MongoDB connection setup
 mongoose.connect(process.env.MONGO_URI)
   .then(() => console.log('✅ MongoDB connected'))
   .catch((err) => console.error('❌ MongoDB connection error:', err));
