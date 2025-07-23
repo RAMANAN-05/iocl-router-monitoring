@@ -10,10 +10,10 @@ dotenv.config();
 
 const app = express();
 
-// ✅ Allow CORS for your frontend deployment URL
+// ✅ Allow CORS only from your deployed frontend
 app.use(cors({
   origin: 'https://connect-frontend-t3if.onrender.com',
-  credentials: true // Optional if you use cookies or sessions
+  credentials: true // Optional: needed only for cookies or credentials
 }));
 
 app.use(express.json());
@@ -26,7 +26,7 @@ mongoose.connect(process.env.MONGO_URI)
   .then(() => console.log('✅ MongoDB connected'))
   .catch((err) => console.error('❌ MongoDB connection error:', err));
 
-// ✅ Test root route to check deployment
+// ✅ Test root route
 app.get('/', (req, res) => {
   res.send('✅ Backend is working!');
 });
@@ -35,7 +35,7 @@ app.get('/', (req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/network', networkRoutes);
 
-// ✅ Optional: Log Excel data once at startup
+// ✅ Log Excel location data once at startup
 const data = readLocationData();
 console.log('📄 Loaded location data:', data);
 
