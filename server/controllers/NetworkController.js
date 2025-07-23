@@ -2,6 +2,7 @@ const ping = require('ping');
 const readLocationData = require('../utils/readExcel');
 const PingLog = require('../models/PingLog'); // Log model
 
+// GET /api/network/status
 exports.getNetworkStatus = async (req, res) => {
   try {
     console.log("⚙️ Starting network status check...");
@@ -67,5 +68,16 @@ exports.getNetworkStatus = async (req, res) => {
   } catch (err) {
     console.error("❌ Error fetching network status:", err);
     res.status(500).json({ message: 'Failed to get network status' });
+  }
+};
+
+// GET /api/network/history
+exports.getNetworkHistory = async (req, res) => {
+  try {
+    const history = await PingLog.find().sort({ checkedAt: -1 }).limit(100);
+    res.status(200).json(history);
+  } catch (err) {
+    console.error("❌ Error fetching network history:", err);
+    res.status(500).json({ message: 'Failed to get network history' });
   }
 };
