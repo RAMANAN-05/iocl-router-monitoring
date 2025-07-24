@@ -16,13 +16,12 @@ const DashBoard = () => {
   const [isAlarmPlaying, setIsAlarmPlaying] = useState(false);
 
   const prevLocationsRef = useRef([]);
-  const audioRef = useRef(new Audio("/alarm.mp3"));
+  const audioRef = useRef(new Audio(`${process.env.PUBLIC_URL}/alarm.mp3`));
   const intervalRef = useRef(null);
   const isMountedRef = useRef(true);
   const hasAlertedRef = useRef(false);
-  const navigate = useNavigate();
-
   const poorStartTimes = useRef({});
+  const navigate = useNavigate();
 
   const detectDroppedConnections = (prev, current) => {
     const dropped = [];
@@ -57,12 +56,15 @@ const DashBoard = () => {
         }
       });
     });
+
     return alarms;
   };
 
   const fetchStatus = useCallback(async () => {
     try {
-      const res = await fetch("/api/network/status");
+      const res = await fetch(
+        `${process.env.REACT_APP_API_BASE || ""}/api/network/status`
+      );
       const data = await res.json();
       if (!isMountedRef.current) return;
 
@@ -72,10 +74,6 @@ const DashBoard = () => {
       const anyPoor = data.some(
         (entry) => entry.jio === "poor" || entry.bsnl === "poor"
       );
-
-      console.log("🔍 Dropped:", dropped);
-      console.log("🕒 Alarms:", alarms);
-      console.log("🚨 hasAlerted:", hasAlertedRef.current);
 
       if ((dropped.length > 0 || alarms.length > 0) && !isMuted) {
         if (!hasAlertedRef.current) {
@@ -93,7 +91,6 @@ const DashBoard = () => {
           alert("⚠️ " + alertMessage);
         }
       } else if (!anyPoor) {
-        // Reset only when all are good
         hasAlertedRef.current = false;
         audioRef.current.pause();
         audioRef.current.currentTime = 0;
