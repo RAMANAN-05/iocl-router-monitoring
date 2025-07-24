@@ -12,7 +12,7 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// ✅ MongoDB connection setup (deprecated options removed)
+// ✅ MongoDB connection setup
 mongoose.connect(process.env.MONGO_URI)
   .then(() => console.log('✅ MongoDB connected'))
   .catch((err) => console.error('❌ MongoDB connection error:', err));
@@ -24,6 +24,11 @@ app.use('/api/network', networkRoutes);
 // ✅ Optional: Log Excel data once at startup
 const data = readLocationData();
 console.log('📄 Loaded location data:', data);
+
+// ✅ Root route to test backend deployment
+app.get('/', (req, res) => {
+  res.send('✅ IOCL backend is live!');
+});
 
 // ✅ Start server
 const PORT = process.env.PORT || 5000;
