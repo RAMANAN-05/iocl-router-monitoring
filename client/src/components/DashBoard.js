@@ -99,7 +99,7 @@ const DashBoard = () => {
 
   useEffect(() => {
     fetchStatus();
-    intervalRef.current = setInterval(fetchStatus, 30 * 60 * 1000); // Every 30 minutes
+    intervalRef.current = setInterval(fetchStatus,1000); // Every 30 minutes 30 * 60 * 1000
     return () => {
       clearInterval(intervalRef.current);
       isMountedRef.current = false;
