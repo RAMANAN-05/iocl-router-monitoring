@@ -24,6 +24,7 @@ exports.getNetworkStatus = async (req, res) => {
         const jioStatus = jioResult.alive ? 'good' : 'poor';
         const bsnlStatus = bsnlResult.alive ? 'good' : 'poor';
 
+        // ✅ Save to MongoDB
         await PingLog.create({
           location: loc.location?.trim(),
           jioStatus,
@@ -51,7 +52,7 @@ exports.getNetworkStatus = async (req, res) => {
   }
 };
 
-// ✅ 2. Alert if Poor for 30+ Minutes
+// ✅ 2. Alert if continuously Poor for 30+ Minutes
 exports.checkAlertStatus = async (req, res) => {
   try {
     const logs = await PingLog.aggregate([
@@ -74,7 +75,7 @@ exports.checkAlertStatus = async (req, res) => {
 
     logs.forEach((group) => {
       const location = group._id;
-      const recentLogs = group.logs.slice(0, 6); // Last 6 logs (~30 minutes)
+      const recentLogs = group.logs.slice(0, 6); // Last 6 logs (~30 min if ping every 5 min)
 
       const isJioDown = recentLogs.every(log => log.jioStatus === 'poor');
       const isBSNLDown = recentLogs.every(log => log.bsnlStatus === 'poor');
