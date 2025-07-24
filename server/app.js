@@ -33,3 +33,19 @@ app.get('/', (req, res) => {
 // ✅ Start server
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
+
+// ✅ Auto ping every 30 minutes
+const { getNetworkStatus } = require('./controllers/NetworkController');
+
+const runAutoPing = async () => {
+  try {
+    await getNetworkStatus({},{ json: () => {} }); // dummy req/res
+    console.log('✅ Auto ping completed at', new Date().toLocaleString());
+  } catch (err) {
+    console.error('❌ Auto ping failed:', err);
+  }
+};
+
+// Start ping immediately and set interval
+runAutoPing(); // first run on startup
+setInterval(runAutoPing, 60 * 1000); // every 30 minutes

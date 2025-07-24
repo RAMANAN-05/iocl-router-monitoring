@@ -69,20 +69,31 @@ const DashBoard = () => {
       const dropped = detectDroppedConnections(prevLocationsRef.current, data);
       const alarms = checkContinuedPoorStatus(data);
 
-      if ((dropped.length > 0 || alarms.length > 0) && !isMuted && !hasAlertedRef.current) {
-        audioRef.current.loop = true;
-        audioRef.current.currentTime = 0;
-        audioRef.current.play().then(() => setIsAlarmPlaying(true))
-          .catch((err) => console.warn("Audio play error:", err));
-        hasAlertedRef.current = true;
-        const alertMessage = [
-          dropped.length > 0 ? `Signal dropped:\n${dropped.join("\n")}` : null,
-          alarms.length > 0 ? `30min poor status:\n${alarms.join("\n")}` : null,
-        ].filter(Boolean).join("\n\n");
-        alert("⚠️ " + alertMessage);
-      }
+      const anyPoor = data.some(
+        (entry) => entry.jio === "poor" || entry.bsnl === "poor"
+      );
 
-      if (dropped.length === 0 && alarms.length === 0) {
+      console.log("🔍 Dropped:", dropped);
+      console.log("🕒 Alarms:", alarms);
+      console.log("🚨 hasAlerted:", hasAlertedRef.current);
+
+      if ((dropped.length > 0 || alarms.length > 0) && !isMuted) {
+        if (!hasAlertedRef.current) {
+          audioRef.current.loop = true;
+          audioRef.current.currentTime = 0;
+          audioRef.current.play().then(() => setIsAlarmPlaying(true))
+            .catch((err) => console.warn("Audio play error:", err));
+          hasAlertedRef.current = true;
+
+          const alertMessage = [
+            dropped.length > 0 ? `Signal dropped:\n${dropped.join("\n")}` : null,
+            alarms.length > 0 ? `30min poor status:\n${alarms.join("\n")}` : null,
+          ].filter(Boolean).join("\n\n");
+
+          alert("⚠️ " + alertMessage);
+        }
+      } else if (!anyPoor) {
+        // Reset only when all are good
         hasAlertedRef.current = false;
         audioRef.current.pause();
         audioRef.current.currentTime = 0;
@@ -93,13 +104,13 @@ const DashBoard = () => {
       setLocations(data);
       setLoading(false);
     } catch (err) {
-      console.error("Error fetching status", err);
+      console.error("❌ Error fetching status", err);
     }
   }, [isMuted]);
 
   useEffect(() => {
     fetchStatus();
-    intervalRef.current = setInterval(fetchStatus,3000); // Every 30 minutes 30 * 60 * 1000
+    intervalRef.current = setInterval(fetchStatus, 3000);
     return () => {
       clearInterval(intervalRef.current);
       isMountedRef.current = false;

@@ -1,8 +1,21 @@
-const ping = require('ping');
+const tcpp = require('tcp-ping');
 const readLocationData = require('../utils/readExcel');
 const PingLog = require('../models/PingLog');
 
-// ✅ Controller: Get current ping status
+/**
+ * TCP “ping” (no ICMP, works on Render).
+ * Tries port 80 by default. Change to 443 if you prefer HTTPS.
+ */
+function tcpProbe(ip, port = 80) {
+  return new Promise((resolve) => {
+    tcpp.probe(ip, port, (err, isAlive) => {
+      if (err || !isAlive) return resolve('poor');
+      return resolve('good');
+    });
+  });
+}
+
+// =============== 1) LIVE STATUS ===============
 const getNetworkStatus = async (req, res) => {
   try {
     const locations = readLocationData();
@@ -14,87 +27,99 @@ const getNetworkStatus = async (req, res) => {
         const jioIP = loc.jio?.trim();
         const bsnlIP = loc.bsnl?.trim();
 
-        let jioStatus = 'not-applicable';
-        let bsnlStatus = 'not-applicable';
+        const jioStatus =
+          jioIP && !['No Link', 'NA'].includes(jioIP)
+            ? await tcpProbe(jioIP, 80)
+            : 'poor';
 
-        try {
-          if (jioIP && !['No Link', 'NA'].includes(jioIP)) {
-            const jioResult = await ping.promise.probe(jioIP, { timeout: 2, min_reply: 1 });
-            jioStatus = jioResult.alive ? 'good' : 'poor';
-          }
+        const bsnlStatus =
+          bsnlIP && !['No Link', 'NA'].includes(bsnlIP)
+            ? await tcpProbe(bsnlIP, 80)
+            : 'poor';
 
-          if (bsnlIP && !['No Link', 'NA'].includes(bsnlIP)) {
-            const bsnlResult = await ping.promise.probe(bsnlIP, { timeout: 2, min_reply: 1 });
-            bsnlStatus = bsnlResult.alive ? 'good' : 'poor';
-          }
+        // Save
+        await PingLog.create({
+          location,
+          jioStatus,
+          bsnlStatus,
+          timestamp: checkedAt,
+        });
 
-          await PingLog.create({
-            location,
-            jioStatus,
-            bsnlStatus,
-            timestamp: checkedAt
-          });
-
-          return {
-            location,
-            jio: jioStatus,
-            bsnl: bsnlStatus,
-            checkedAt: checkedAt.toLocaleString('en-IN', {
-              hour12: true,
-              timeStyle: 'medium',
-              dateStyle: 'short',
-            }),
-          };
-        } catch (pingErr) {
-          console.error(`❌ Ping failed for ${location}:`, pingErr);
-          return { location, jio: 'error', bsnl: 'error', checkedAt };
-        }
+        return {
+          location,
+          jio: jioStatus,
+          bsnl: bsnlStatus,
+          checkedAt: checkedAt.toLocaleString('en-IN', {
+            hour12: true,
+            timeStyle: 'medium',
+            dateStyle: 'short',
+          }),
+        };
       })
     );
 
     res.json(results);
   } catch (err) {
-    console.error("❌ Error fetching network status:", err);
+    console.error('❌ Error fetching network status:', err);
     res.status(500).json({ message: 'Failed to get network status' });
   }
 };
 
-// ✅ Controller: Alert check — any location poor for 30 mins?
+// =============== 2) 30-MIN CONTINUOUS POOR ALERT ===============
 const checkAlertStatus = async (req, res) => {
   try {
     const THIRTY_MINUTES_AGO = new Date(Date.now() - 30 * 60 * 1000);
-    const locations = readLocationData();
 
-    const problematicLocations = [];
+    const groups = await PingLog.aggregate([
+      { $match: { timestamp: { $gte: THIRTY_MINUTES_AGO } } },
+      { $sort: { timestamp: -1 } },
+      {
+        $group: {
+          _id: '$location',
+          logs: {
+          $push: {
+              timestamp: '$timestamp',
+              jioStatus: '$jioStatus',
+              bsnlStatus: '$bsnlStatus',
+            },
+          },
+        },
+      },
+    ]);
 
-    for (const loc of locations) {
-      const location = loc.location?.trim();
+    const alerts = [];
 
-      const recentLogs = await PingLog.find({
-        location,
-        timestamp: { $gte: THIRTY_MINUTES_AGO }
-      }).sort({ timestamp: -1 });
+    groups.forEach((g) => {
+      const location = g._id;
+      const logs = g.logs;
 
-      if (recentLogs.length === 0) continue;
+      if (!logs || logs.length === 0) return;
 
-      const allPoor = recentLogs.every(log =>
-        (log.jioStatus === 'poor' || log.jioStatus === 'not-applicable') &&
-        (log.bsnlStatus === 'poor' || log.bsnlStatus === 'not-applicable')
-      );
+      const first = logs[logs.length - 1]?.timestamp;
+      const last = logs[0]?.timestamp;
+      const minutes = (new Date(last) - new Date(first)) / (1000 * 60);
 
-      if (allPoor) {
-        problematicLocations.push({ location, logs: recentLogs });
+      const jioDown = logs.every((l) => l.jioStatus === 'poor');
+      const bsnlDown = logs.every((l) => l.bsnlStatus === 'poor');
+
+      if ((jioDown || bsnlDown) && minutes >= 30) {
+        alerts.push({
+          location,
+          jioStatus: jioDown ? 'poor' : 'ok',
+          bsnlStatus: bsnlDown ? 'poor' : 'ok',
+          alert: true,
+        });
       }
-    }
+    });
 
-    res.json({ alert: problematicLocations.length > 0, problematicLocations });
+    res.json({ alerts });
   } catch (err) {
-    console.error("❌ Error checking alert status:", err);
-    res.status(500).json({ message: 'Failed to check alert status' });
+    console.error('❌ Error checking alerts:', err);
+    res.status(500).json({ message: 'Failed to check alerts' });
   }
 };
 
 module.exports = {
   getNetworkStatus,
-  checkAlertStatus
+  checkAlertStatus,
 };
