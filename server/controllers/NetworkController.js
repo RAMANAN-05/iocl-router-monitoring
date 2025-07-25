@@ -36,7 +36,6 @@ const getNetworkStatus = async (req, res) => {
           bsnlIP && !['No Link', 'NA'].includes(bsnlIP)
             ? await tcpProbe(bsnlIP, 80)
             : 'poor';
-
         // Save
         await PingLog.create({
           location,
@@ -102,7 +101,7 @@ const checkAlertStatus = async (req, res) => {
       const jioDown = logs.every((l) => l.jioStatus === 'poor');
       const bsnlDown = logs.every((l) => l.bsnlStatus === 'poor');
 
-      if ((jioDown || bsnlDown) && minutes >= 30) {
+      if ((jioDown || bsnlDown) && minutes >= 30) {            //
         alerts.push({
           location,
           jioStatus: jioDown ? 'poor' : 'ok',

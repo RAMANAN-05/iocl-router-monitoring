@@ -12,20 +12,20 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// ✅ MongoDB connection setup
+// ✅ MongoDB connection (updated: removed deprecated options)
 mongoose.connect(process.env.MONGO_URI)
-  .then(() => console.log('✅ MongoDB connected'))
-  .catch((err) => console.error('❌ MongoDB connection error:', err));
+  .then(() => console.log("✅ Connected to MongoDB"))
+  .catch((err) => console.error("❌ MongoDB connection failed:", err));
 
 // ✅ Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/network', networkRoutes);
 
-// ✅ Optional: Log Excel data once at startup
+// ✅ Log location data from Excel at startup
 const data = readLocationData();
 console.log('📄 Loaded location data:', data);
 
-// ✅ Root route to test backend deployment
+// ✅ Root route for health check
 app.get('/', (req, res) => {
   res.send('✅ IOCL backend is live!');
 });
@@ -39,13 +39,13 @@ const { getNetworkStatus } = require('./controllers/NetworkController');
 
 const runAutoPing = async () => {
   try {
-    await getNetworkStatus({},{ json: () => {} }); // dummy req/res
-    console.log('✅ Auto ping completed at', new Date().toLocaleString());
+    await getNetworkStatus({}, { json: () => {} }); // dummy req/res for standalone call
+    console.log('📡 Auto ping completed at', new Date().toLocaleString());
   } catch (err) {
     console.error('❌ Auto ping failed:', err);
   }
 };
 
-// Start ping immediately and set interval
-runAutoPing(); // first run on startup
-setInterval(runAutoPing, 60 * 1000); // every 30 minutes
+// Run once on startup, then every 30 mins
+runAutoPing();
+setInterval(runAutoPing, 5 * 60 * 1000); // every 30 minutes

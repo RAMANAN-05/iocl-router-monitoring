@@ -107,7 +107,7 @@ const DashBoard = () => {
 
   useEffect(() => {
     fetchStatus();
-    intervalRef.current = setInterval(fetchStatus, 3000);
+    intervalRef.current = setInterval(fetchStatus, 1000);    // time
     return () => {
       clearInterval(intervalRef.current);
       isMountedRef.current = false;
@@ -145,7 +145,7 @@ const DashBoard = () => {
   };
 
   const renderArrow = (status) =>
-    status === "good" ? (
+    status?.toLowerCase() === "good" ? (      //changed this line lastly
       <FaArrowUp className="arrow green" />
     ) : (
       <FaArrowDown className="arrow red" />
