@@ -48,4 +48,4 @@ const runAutoPing = async () => {
 
 // Run once on startup, then every 30 mins
 runAutoPing();
-setInterval(runAutoPing, 5 * 60 * 1000); // every 30 minutes
+setInterval(runAutoPing, 5 * 60 * 1000); // every 5 minutes
